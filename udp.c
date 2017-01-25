@@ -14,7 +14,7 @@ typedef struct {
 } arguments;
 
 void * client(void * args){
-  arguments * data = args;
+  arguments * data = (arguments *) args;
   char buff[MAX];
 
   while(true){
@@ -30,16 +30,16 @@ void * client(void * args){
 }
 
 void * server(void * args){
-  arguments * data = args;
+  arguments * data = (arguments *) args;
   char buff[MAX];
-  bool init = true;
+  //bool init = true;
 
   while(true){
     recvfrom(data->sockfd,buff,sizeof(buff),0,(struct sockaddr *)&data->servaddr,&data->len);
-    if(init && data->server){
-      connect(data->sockfd, (struct sockaddr *)&data->servaddr, data->len);
-      init = false;
-    }
+    // if(init && data->server){
+    //   connect(data->sockfd, (struct sockaddr *)&data->servaddr, data->len);
+    //   init = false;
+    // }
 
     printf("%s",buff);
   }
