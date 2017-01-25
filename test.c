@@ -21,7 +21,7 @@
 #define MAXSIZE sizeof(KEYWORD)+2+(int)(floor(log10(LONG_MAX))+1)
 #define TIME(start, stop) 1000*(end.tv_sec-start.tv_sec)+(end.tv_usec-start.tv_usec)/1000
 
-#define INVALID "invalid or missing options\nusage: snc [-k] [-l] [-u] [-s source_ip_address] [hostname] port\n"
+#define INVALID "invalid or missing options\nusage: snc [-l] [-u] [-s source_ip_address] [hostname] port\n"
 
 void errors(int i){
 	switch(i){
@@ -38,6 +38,77 @@ void invalid_message(){
   exit(1);
 }
 
+void *udplistener(int port) {
+	int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+	if(sockfd == -1) errors(1)
+
+	struct sockaddr_in serveraddr;
+	bzero((char *) &serveraddr, sizeof(serveraddr));
+	serveraddr.sin_family = AF_INET;
+	serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	serveraddr.sin_port = htons((unsigned short) atoi(port));
+
+	if (bind(sockfd, (struct sockaddr *) &serveraddr, sizeof(serveraddr)) < 0)
+		errors(2)
+
+	struct sockaddr_in clientaddr;
+	socklen_t clientlen;
+	int n;
+	char buf[100];
+	clientlen = sizeof(clientaddr);
+	bzero(buf, 100);
+	n = recvfrom(sockfd, buf, 100, 0, (struct sockaddr *) &clientaddr, &clientlen);
+	if (n < 0) errors(3)
+
+	struct hostent *hostp;
+	hostp = gethostbyaddr((const char *)&clientaddr.sin_addr.s_addr, sizeof(clientaddr.sin_addr.s_addr), AF_INET);
+	if (hostp == NULL) errors(4)
+
+	char * hostaddrp;
+	hostaddrp = inet_ntoa(clientaddr.sin_addr);
+	if (hostaddrp == NULL) errors(5)
+
+	printf("server received datagram from %s (%s)\n", hostp->h_name, hostaddrp);
+	printf("server received %lu/%d bytes: %s\n", strlen(buf), n, buf);
+
+}
+
+void *udpsender(int port, char * hostname){
+	int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+	if(sockfd == -1) errors(1)
+
+	// Get addr info, used to bind() and connect()
+	struct addrinfo *res_ref, hints = {0, AF_INET, SOCK_DGRAM};
+	if (getaddrinfo(hostname, port, &hints, &res_ref)) errors(2)
+
+	if (sendto(sockfd, "init", sizeof("init"), 0, SERVER, sizeof(struct sockaddr)) == -1)
+		errors(3)
+}
+
+typedef struct {
+    int * sockfd;
+    int * sock_addr_size;
+		struct addrinfo **res_ref;
+} updsenderinfo;
+
+void *udpsender(void * args){
+	
+	uppsenderinfo * data = args;
+	int sockfd = *data->sockfd;
+	int sock_addr_size = *data->sock_addr_size;
+	struct addrinfo *res_ref = *data->res_ref;
+
+	char buffer[100];
+	while(true){
+		scanf("%s", buffer);
+		if(sendto(sockfd, buffer, strlen(buffer), 0, SERVER, sock_addr_size) == -1)
+			errors(1)
+	}
+	free(data)
+}
+
+
+
 bool listen_server = false, udp = false, source = false;
 char * source_ip_address, * port, * hostname = NULL, * flag_position[3];
 
@@ -49,6 +120,7 @@ pthread_t tid[2];
 int main(int argc, char **argv) {
 
   // PARSE INPUT
+	printf("%d\n", argc);
 
   // Handle all options
   for(int i = 1; i < argc; i++){ // First argv will be "snc"
@@ -92,85 +164,26 @@ int main(int argc, char **argv) {
   if(!listen_server && !hostname)
     invalid_message();
 
-  /* Test inputs!
-  printf("Listen: "); if(listen_server) printf("On\n"); else printf("Off\n");
-  printf("UDP: "); if(udp) printf("On\n"); else printf("Off\n");
-  printf("Source: "); if(source) printf("%s\n", source_ip_address); else printf("\n");
-  printf("Hostname: "); if(hostname) printf("%s\n", hostname); else printf("\n");
-  printf("Port: %s\n", port);
-  return 0;
-  */
-
-
-/*
-  struct sockaddr_in si_other;
-  int sockfd = socket(AF_INET, SOCK_DGRAM, 0), i, slen=sizeof(si_other);
-  char buf[100];
-  char message[100];
-
-  if (sockfd == -1) {
-    printf("socket");
-    exit(1);
-  }
-*/
-
 
   // Connect to the other machine
   if(listen_server){
-    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-    if(sockfd == -1){
-      // Handle error
-    }
-
-    struct sockaddr_in serveraddr;
-    bzero((char *) &serveraddr, sizeof(serveraddr));
-    serveraddr.sin_family = AF_INET;
-    serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    serveraddr.sin_port = htons((unsigned short) atoi(port));
-
-    if (bind(sockfd, (struct sockaddr *) &serveraddr, sizeof(serveraddr)) < 0) {
-      // Handle error
-    }
-
-    struct sockaddr_in clientaddr;
-    socklen_t clientlen;
-    int n;
-    char buf[100];
-    clientlen = sizeof(clientaddr);
-    bzero(buf, 100);
-    n = recvfrom(sockfd, buf, 100, 0, (struct sockaddr *) &clientaddr, &clientlen);
-    if (n < 0){
-      // Handle error
-    }
-
-    struct hostent *hostp;
-    hostp = gethostbyaddr((const char *)&clientaddr.sin_addr.s_addr, sizeof(clientaddr.sin_addr.s_addr), AF_INET);
-    if (hostp == NULL) {
-      // Handle error
-    }
-
-    char * hostaddrp;
-    hostaddrp = inet_ntoa(clientaddr.sin_addr);
-    if (hostaddrp == NULL) {
-      // Handle error
-    }
-
-    printf("server received datagram from %s (%s)\n", hostp->h_name, hostaddrp);
-    printf("server received %lu/%d bytes: %s\n", strlen(buf), n, buf);
-
   }
   else {
     // Create a socket
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     if(sockfd == -1){
       // Handle error
+			error(1)
     }
 
     // Get addr info, used to bind() and connect()
     struct addrinfo *res_ref, hints = {0, AF_INET, SOCK_DGRAM};
     if (getaddrinfo(hostname, port, &hints, &res_ref)) {
       // Handle error
+			error(2)
     }
+
+
     if (sendto(sockfd, "init", sizeof("init"), 0, SERVER, sizeof(struct sockaddr)) == -1){
       // Handle error
     }
