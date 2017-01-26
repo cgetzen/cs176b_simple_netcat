@@ -13,6 +13,7 @@ void errors(int i){
     case 4: printf("server acccept failed...\n"); break;
     case 5: printf("Creating thread failed...\n"); break;
     case 6: printf("Joining thread failed...\n"); break;
+    case 9: printf("snc [-l] [-u] [-s source_ip_address] [hostname] port\n"); break;
   }
   exit(i);
 }
@@ -20,6 +21,7 @@ void errors(int i){
 // snc [-l] [-u] [-s source_ip_address] [hostname] port
 int main(int argc, char * argv[]) {
   extern char *optarg;
+  if (argc < 3) errors(9);
   bool tcp = true, s_mode = false, source_ip = false, hostname = false;
   char *source_ip_address;
   char c;
@@ -29,8 +31,11 @@ int main(int argc, char * argv[]) {
       case 'u': tcp = false; break;
       case 's': source_ip = true; source_ip_address = optarg; break;
     }
-  if(argv[argc-2] != "-" && argv[argc-2] != source_ip_address && argc > 2)
+  if(argv[argc-2][0] != '-' && argv[argc-2] != source_ip_address && argc > 2)
     hostname = true;
+
+  if(hostname == false && s_mode == false) errors(9);
+
   int port = atoi(argv[argc-1]);
 
   pthread_t thread_1, thread_2;
@@ -41,8 +46,10 @@ int main(int argc, char * argv[]) {
   struct sockaddr_in servaddr;
   bzero(&servaddr,sizeof(servaddr));
   servaddr.sin_family=AF_INET;
-  servaddr.sin_addr.s_addr=htonl(INADDR_ANY);
+  servaddr.sin_addr.s_addr= htonl(INADDR_ANY);
   servaddr.sin_port=htons(port);
+  if(hostname)
+    inet_aton(argv[argc-2], &servaddr.sin_addr);
 
   if(s_mode){
     // SERVER CODE
