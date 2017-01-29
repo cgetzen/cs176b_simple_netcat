@@ -1,3 +1,4 @@
+#include<stdlib.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
@@ -5,19 +6,25 @@
 #include <netinet/in.h>
 #include <unistd.h>
 
-
-#define MAX 80
+#define MAX 1024
 
 void * tcp_client(void * args){
-  char buff[MAX];
+
+  char buff[MAX] = "a";
   int * sockfd = (int *) args;
+  int i = 0;
 
   while(true){
     bzero(buff,sizeof(buff));
-    for(int i = 0; i < MAX; i++){
+    for(i = 0; i < MAX; i++){
       buff[i] = getchar();
       if(buff[i] == '\n')
         break;
+      if(buff[i] == EOF){
+        buff[0] = EOF;
+        write(*sockfd, buff, sizeof(buff));
+        exit(0);
+      }
     }
     write( *sockfd, buff, sizeof(buff));
   }
@@ -31,11 +38,9 @@ void * tcp_server(void * args){
 
   while(true){
     read(*sockfd, buff, sizeof(buff));
-    printf("From Server : %s", buff);
-    if((strncmp(buff,"exit",4))==0){
-      printf("Client Exit...\n");
-      break;
-    }
+    if(buff[0] == EOF)
+      exit(0);
+    printf("%s", buff);
   }
   return NULL;
 }
